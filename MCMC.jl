@@ -4,9 +4,9 @@ import Base.copy
 include("Utils.jl")
 include("MCMCState.jl")
 
-gridInfoFile = "hiv1_env_300_nooverlap_aligned.nex.grid_info"
-#gridInfoFile = "hcv1_polyprotein_300_aligned.nex.grid_info"
-#gridInfoFile = "lysin.nex.grid_info"
+#gridInfoFile = "datasets/hiv1_env_300.nex.grid_info"
+#gridInfoFile = "datasets/hcv1_polyprotein_300.nex.grid_info"
+gridInfoFile = "datasets/lysin.nex.grid_info"
 
 srand(948402288028201)
 rng = MersenneTwister(948402288028201)
@@ -227,6 +227,7 @@ for iter=1:maxIterations
     proposedState.α = 0.0
     #proposedState.τ = 0.0
     #proposedState.β = 10000.0
+    #=
     proposedState.hiddenStates = [1 for i=1:numSites]
     mrfll = computeAutobinomialMRFLogLikelihood2(proposedState.hiddenStates, proposedState.α, proposedState.β,  proposedState.τ)
     mrfll2 = computeGaussianMRFLogLikelihood(proposedState.hiddenStates, proposedState.α, proposedState.β,  proposedState.τ)
@@ -235,6 +236,7 @@ for iter=1:maxIterations
     mrfll = computeAutobinomialMRFLogLikelihood2(proposedState.hiddenStates, proposedState.α, proposedState.β,  proposedState.τ)
     mrfll2 = computeGaussianMRFLogLikelihood(proposedState.hiddenStates, proposedState.α, proposedState.β,  proposedState.τ)
     print("B",mrfll,"\t",mrfll2,"\t", proposedState.β,"\n")
+    =#
 
     logPropRatio = 0
     if valid        
@@ -270,7 +272,6 @@ for iter=1:maxIterations
         end
         #=
         if iterations % 500 == 0
-
             gll = computeGaussianMRFLogLikelihood(currentState.hiddenStates, currentState.α, currentState.β,  currentState.τ)
             print(currentState.logMRFLikelihood, "\t", gll, "\n")
         end
