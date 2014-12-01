@@ -11,11 +11,12 @@ type MCMCState
     β::Float64
     τ::Float64
     cachedPhyloLikelihoods::Array{Float64,2}
+    cachedDet::Float64
 
-    MCMCState(logLikelihood,logPhyloLikelihood,logMRFLikelihood,logPrior,θ,hiddenStates,α,β,τ,cachedPhyloLikelihoods) = new(logLikelihood,logPhyloLikelihood,logMRFLikelihood,logPrior,θ,hiddenStates,α,β,τ,cachedPhyloLikelihoods)
+    MCMCState(logLikelihood,logPhyloLikelihood,logMRFLikelihood,logPrior,θ,hiddenStates,α,β,τ,cachedPhyloLikelihoods,cachedDet) = new(logLikelihood,logPhyloLikelihood,logMRFLikelihood,logPrior,θ,hiddenStates,α,β,τ,cachedPhyloLikelihoods,cachedDet)
 
     function MCMCState(other::MCMCState)
-        return new(other.logLikelihood,other.logPhyloLikelihood,other.logMRFLikelihood,other.logPrior,copy(other.θ),copy(other.hiddenStates),other.α,other.β,other.τ,copy(other.cachedPhyloLikelihoods))
+        return new(other.logLikelihood,other.logPhyloLikelihood,other.logMRFLikelihood,other.logPrior,copy(other.θ),copy(other.hiddenStates),other.α,other.β,other.τ,copy(other.cachedPhyloLikelihoods),other.cachedDet)
     end
 end
 
@@ -30,4 +31,5 @@ function copy(source::MCMCState, dest::MCMCState)
     dest.β = source.β
     dest.τ = source.τ
     copy(source.cachedPhyloLikelihoods, dest.cachedPhyloLikelihoods)
+    dest.cachedDet = source.cachedDet
 end

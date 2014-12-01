@@ -5,7 +5,7 @@ type FiniteIntSet
     size::Int
     state::Int
 
-    MCMCState(maxElements, array, contains, size, state) = new(maxElements, array, contains, size, state)
+    FiniteIntSet(maxElements, array, contains, size, state) = new(maxElements, array, contains, size, state)
 
     function FiniteIntSet(maxElements::Int)
         array = zeros(Int,maxElements)
