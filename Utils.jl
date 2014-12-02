@@ -41,3 +41,7 @@ function sample(v::Array{Float64})
     return n
 end
 
+nonzeros(S::SparseMatrixCSC) = S.nzval
+rowvals(S::SparseMatrixCSC) = S.rowval
+nzrange(S::SparseMatrixCSC, col::Integer) = S.colptr[col]:(S.colptr[col+1]-1)
+

@@ -5,7 +5,7 @@ include("Utils.jl")
 include("MCMCState.jl")
 include("AcceptanceLogger.jl")
 
-function computeLogLikelihoods(state::MCMCState, conditionals::Array{Float64,2}, scalarSum::Float64, c::Float64, partialPhyloUpdate::Bool, partialMRFUpdate::Bool)
+function computeLogLikelihoods(state::MCMCState, conditionals::Array{Float64,2}, scalarSum::Float64, c::Float64, distMatrix::SparseMatrixCSC{Float64, Int}, partialPhyloUpdate::Bool, partialMRFUpdate::Bool)
     if !partialPhyloUpdate # recompute site likelihoods
         state.cachedPhyloLikelihoods = log((state.θ)'*conditionals)
     end
@@ -16,8 +16,9 @@ function computeLogLikelihoods(state::MCMCState, conditionals::Array{Float64,2},
     end
 
     state.logPhyloLikelihood = phyloLikelihood+scalarSum
-    state.logMRFLikelihood = computeAutoLogisticMRFLogLikelihood(state)
-    state.logMRFLikelihood = computeGaussianMRFLogLikelihood(state, partialMRFUpdate)
+    #state.logMRFLikelihood = computeAutoLogisticMRFLogLikelihood(state, distMatrix)
+    state.logMRFLikelihood = computeGaussianMRFLogLikelihood(state, distMatrix, partialMRFUpdate)
+
     state.logLikelihood = state.logPhyloLikelihood+state.logMRFLikelihood
 
     n=size(state.cachedPhyloLikelihoods, 1) # get number of hidden states
@@ -88,24 +89,21 @@ function thetaMove(θ::Array{Float64})
     end
 end
 
-function computeAutoLogisticMRFLogLikelihood(state::MCMCState)
-#= computes auto-logistic likelihood where neighbours are -3 to +3 adjacent positions in sequence =#
+function computeAutoLogisticMRFLogLikelihood(state::MCMCState, distMatrix::SparseMatrixCSC{Float64, Int})
     ll = 0.0
-    dist = 3
+    rows = rowvals(distMatrix)
+    vals = nonzeros(distMatrix)
     for i=1:numSites # sites
         x_i = state.hiddenStates[i]-1.0
         denominator = 0.0
-        start = max(1,i-dist)
-        stop = min(numSites,i+dist)
-        for j=start:stop # j = neighbours of i
+        for sparseindex in nzrange(distMatrix, i) # j = neighbours of i
+            j = rows[sparseindex]
             x_j = state.hiddenStates[j]-1.0
-            if i != j
-                mult = state.β*exp(-abs(i-j-1)*state.τ) # i-j-1 starts at 0
-                if x_i == 0.0
-                    denominator += state.α*x_i + mult*(2.0*x_j-1.0)
-                else
-                    denominator -= state.α*x_i + mult*(2.0*x_j-1.0)
-                end
+            mult = state.β*exp(-(vals[sparseindex]-1)*state.τ) # i-j-1 starts at 0
+            if x_i == 0.0
+                denominator += state.α*x_i + mult*(2.0*x_j-1.0)
+            else
+                denominator -= state.α*x_i + mult*(2.0*x_j-1.0)
             end
         end
         cond = -logSumOneAndExponential(denominator)
@@ -114,22 +112,18 @@ function computeAutoLogisticMRFLogLikelihood(state::MCMCState)
     return ll
 end
 
-function computeGaussianMRFLogLikelihood(state::MCMCState, partialMRFUpdate::Bool)
-#= computes gaussian likelihood where neighbours are -3 to +3 adjacent positions in sequence =#
+function computeGaussianMRFLogLikelihood(state::MCMCState, distMatrix::SparseMatrixCSC{Float64, Int}, partialMRFUpdate::Bool)
     B=zeros(Float64, numSites, numSites)
 
-    dist = 3
+    rows = rowvals(distMatrix)
+    vals = nonzeros(distMatrix)
     for i=1:numSites
-        start = max(1,i-dist)
-        stop = min(numSites,i+dist)
-        for j=start:stop # j = neighbours of i
-            if i == j
-                B[i,j] = 1.0
-            else
-                B[i,j] = state.β*exp(-abs(i-j-1)*state.τ) # i-j-1 starts at 0
-                B[j,i] = B[i,j]
-            end
-        end
+        B[i,i] = 1.0
+        for sparseindex in nzrange(distMatrix, i) # j = neighbours of i
+            j = rows[sparseindex]
+            B[i,j] = state.β*exp(-(vals[sparseindex]-1)*state.τ)
+            B[j,i] = B[i,j]
+        end        
     end
 
     if !partialMRFUpdate # recompute determinant: O(N^3)
@@ -147,9 +141,29 @@ function computeGaussianMRFLogLikelihood(state::MCMCState, partialMRFUpdate::Boo
     return ll
 end
 
+function getLinearDependenceDistanceMatrix(numSites::Int, dist::Int)
+    I = Int[]
+    J = Int[]
+    V = Float64[]
+
+    for i=1:numSites
+        start = max(1,i-dist)
+        stop = min(numSites,i+dist)
+        for j=start:stop # j = neighbours of i
+            if i != j
+                push!(I, i)
+                push!(J, j)
+                push!(V, abs(i-j))
+            end
+        end
+    end
+    return sparse(I, J, V)
+end
+
 gridInfoFile = "datasets/hiv1_env_300.nex.grid_info"
 #gridInfoFile = "datasets/hcv1_polyprotein_300.nex.grid_info"
 #gridInfoFile = "datasets/lysin.nex.grid_info"
+
 
 srand(948402288028201)
 rng = MersenneTwister(948402288028201)
@@ -164,6 +178,8 @@ conditionals = dataset[4]
 scalars = dataset[5]
 scalarSum = sum(scalars)
 
+distMatrix = getLinearDependenceDistanceMatrix(numSites, 3)
+
 numHiddenStates=2
 partialPhyloUpdate = false
 partialMRFUpdate = false
@@ -176,7 +192,7 @@ end
 initialPhyloLikelihoods = zeros(Float64, numHiddenStates, numSites)
 
 currentState = MCMCState(0.0,0.0,0.0,0.0,copy(initialθ),[rand(1:2) for i=1:numSites],0.0,0.5,1.0,copy(initialPhyloLikelihoods),0.0)
-computeLogLikelihoods(currentState, conditionals, scalarSum, c, partialPhyloUpdate, partialMRFUpdate)
+computeLogLikelihoods(currentState, conditionals, scalarSum, c, distMatrix, partialPhyloUpdate, partialMRFUpdate)
 proposedState  = MCMCState(currentState)
 
 iterations = 0
@@ -234,7 +250,7 @@ for iter=1:maxIterations
 
     logPropRatio = 0
     if valid        
-        computeLogLikelihoods(proposedState, conditionals, scalarSum, c, partialPhyloUpdate, partialMRFUpdate)
+        computeLogLikelihoods(proposedState, conditionals, scalarSum, c, distMatrix, partialPhyloUpdate, partialMRFUpdate)
         logPropRatio =  proposedState.logPrior - currentState.logPrior
     end
     Δll = proposedState.logLikelihood - currentState.logLikelihood + logPropRatio
