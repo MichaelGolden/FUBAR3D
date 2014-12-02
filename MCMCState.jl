@@ -30,6 +30,7 @@ function copy(source::MCMCState, dest::MCMCState)
     copy(source.hiddenStates, dest.hiddenStates)
     dest.α = source.α
     dest.β = source.β
+    dest.σ = source.σ
     dest.τ = source.τ
     copy(source.cachedPhyloLikelihoods, dest.cachedPhyloLikelihoods)
     dest.cachedDet = source.cachedDet

@@ -16,11 +16,10 @@ function computeLogLikelihoods(state::MCMCState, conditionals::Array{Float64,2},
     end
 
     state.logPhyloLikelihood = phyloLikelihood+scalarSum
-    state.logPhyloLikelihood = 0.0
-    #state.logMRFLikelihood = computeAutoLogisticMRFLogLikelihood(state, distMatrix)
+    state.logPhyloLikelihood = 0.0 # no data
+    state.logMRFLikelihood = computeIsingPseudoLogLikelihood(state, distMatrix)
     #state.logMRFLikelihood = computeBensMRFLogLikelihood(state, distMatrix)
-
-    state.logMRFLikelihood = computeGaussianMRFLogLikelihood(state, distMatrix, partialMRFUpdate)
+    #state.logMRFLikelihood = computeGaussianMRFLogLikelihood(state, distMatrix, partialMRFUpdate)
 
     state.logLikelihood = state.logPhyloLikelihood+state.logMRFLikelihood
 
@@ -29,7 +28,7 @@ function computeLogLikelihoods(state::MCMCState, conditionals::Array{Float64,2},
     for hiddenState=1:n
         state.logPrior += sum(log(state.θ[:,hiddenState])*(c-1.0))
     end
-    state.logPrior = 0.0
+    state.logPrior = 0.0  # no data
 end
 
 function gibbsUpdate(state::MCMCState, hiddenState::Int, conditionals::Array{Float64,2}, scalarSum::Float64, c::Float64)
@@ -75,7 +74,7 @@ function fractionNeighboursSame(hiddenStates::Array{Int8})
     return fractionSame / n
 end
 
-function thetaMove(θ::Array{Float64})
+function thetaMove(θ::Array{Float64}) # unused
     x = rand(1:numGridPoints)
     y = x
     while x==y
@@ -93,77 +92,24 @@ function thetaMove(θ::Array{Float64})
     end
 end
 
-function computeAutoLogisticMRFLogLikelihood2(state::MCMCState, distMatrix::SparseMatrixCSC{Float64, Int})
+function computeIsingPseudoLogLikelihood(state::MCMCState, distMatrix::SparseMatrixCSC{Float64, Int})
     ll = 0.0
     rows = rowvals(distMatrix)
     vals = nonzeros(distMatrix)
-    for i=1:numSites # sites
+    for i=1:numSites
         x_i = state.hiddenStates[i]-1.0
-        denominator = state.α*x_i
-        for sparseindex in nzrange(distMatrix, i) # j = neighbours of i
-            j = rows[sparseindex]
-            #print(i,"\t",j,"\t",nzrange(distMatrix, i),"\n")
-            x_j = state.hiddenStates[j]-1.0
-            mult = state.β*exp(-(vals[sparseindex]-1.0)*state.τ) # i-j-1 starts at 0
-            #print(state.β,"\t", i,"\t",j,"\t",mult,"\n")
-            #=
-            if x_i == 0.0
-                denominator +=  mult*(2.0*x_j-1.0)
-            else
-                denominator -=  mult*(2.0*x_j-1.0)
-            end
-            =#
-            if x_i == x_j
-                denominator -= mult
-            else
-                denominator += mult
-            end
-        end
-        #print(exp(-logSumOneAndExponential(denominator)), exp(-logSumOneAndExponential(-denominator)))
-        cond = -logSumOneAndExponential(denominator)
-        ll += cond
-    end
-    return ll
-end
-
-function computeAutoLogisticMRFLogLikelihood(state::MCMCState, distMatrix::SparseMatrixCSC{Float64, Int})
-    ll = 0.0
-    rows = rowvals(distMatrix)
-    vals = nonzeros(distMatrix)
-    for i=1:numSites # sites
-        x_i = state.hiddenStates[i]-1.0
-        denominator = state.α*x_i
-        x0 = 0.0
-        x1 = 0.0
-        den = 0.0
-        num = 0.0
-        for sparseindex in nzrange(distMatrix, i) # j = neighbours of i
-            j = rows[sparseindex]
+        q = 0.0
+        for sparseindex in nzrange(distMatrix, i)
+            j = rows[sparseindex]  # j = neighbours of i
             mult = state.β*exp(-(vals[sparseindex]-1.0)*state.τ) # i-j-1 starts at 0
             x_j = state.hiddenStates[j]-1.0
-            if x_j == 0.0
-                x0 += mult
-                x1 -= mult
-            else
-                x0 -= mult
-                x1 += mult
-            end
-
             if x_i == x_j
-                den += mult
+                q += mult
             else
-                num -= mult
+                q -= mult
             end
         end
-        #print(exp(-logSumOneAndExponential(denominator)), exp(-logSumOneAndExponential(-denominator)))
-        #cond = -logSumOneAndExponential(x1-x0)
-        #=
-        if x_i == 0
-            ll += log(exp(x0)/(exp(x0)+exp(x1)))
-        else
-            ll += log(exp(x1)/(exp(x0)+exp(x1)))
-        end=#
-        ll += log(exp(den)/(exp(den)+exp(num)))
+        ll += -logSumOneAndExponential(q)
     end
     return ll
 end
@@ -198,12 +144,45 @@ function computeGaussianMRFLogLikelihood(state::MCMCState, distMatrix::SparseMat
     rows = rowvals(distMatrix)
     vals = nonzeros(distMatrix)
     for i=1:numSites
+        B[i,i] = 1.0 * (state.σ*state.σ)
+        for sparseindex in nzrange(distMatrix, i) # j = neighbours of i
+            j = rows[sparseindex]
+            B[i,j] = state.β*exp(-(vals[sparseindex]-1)*state.τ) * (state.σ*state.σ)
+            B[j,i] = B[i,j]
+        end        
+    end
+
+    if !isposdef(B)
+        return -Inf
+    end
+
+    if !partialMRFUpdate # recompute determinant: O(N^3)
+        state.cachedDet = logdet(B)
+    end
+
+    v = zeros(Float64, numSites)
+    for i=1:numSites
+        v[i] = state.hiddenStates[i] - 1.5
+    end
+
+
+    ll = -(2*pi*numSites*0.5) - (state.cachedDet*0.5) - (0.5*v'*inv(B)*v)
+
+    return ll
+end
+
+function computeGaussianMRFLogLikelihood2(state::MCMCState, distMatrix::SparseMatrixCSC{Float64, Int}, partialMRFUpdate::Bool)
+    B=zeros(Float64, numSites, numSites)
+
+    rows = rowvals(distMatrix)
+    vals = nonzeros(distMatrix)
+    for i=1:numSites
         B[i,i] = 1.0
         for sparseindex in nzrange(distMatrix, i) # j = neighbours of i
             j = rows[sparseindex]
             B[i,j] = state.β*exp(-(vals[sparseindex]-1)*state.τ)
             B[j,i] = B[i,j]
-        end        
+        end
     end
 
 
@@ -222,10 +201,16 @@ function computeGaussianMRFLogLikelihood(state::MCMCState, distMatrix::SparseMat
         state.cachedDet = logdet(B)
     end
 
-        v = zeros(Float64, numSites)
+    v = zeros(Float64, numSites)
     for i=1:numSites
         v[i] = state.hiddenStates[i] - 1.5
     end
+
+
+    a = (state.cachedDet*0.5)
+    b = (log(2*pi*state.σ*state.σ)*numSites*0.5)
+    c = (((v')*B*v)[1]/(2.0*state.σ*state.σ))
+    print(v,"\t",state.σ,"\t",state.cachedDet,"\t",((v')*B*v),"\t",a,"\t",b,"\t",c,"\n")
 
     ll = (state.cachedDet*0.5) - (log(2*pi*state.σ*state.σ)*numSites*0.5) + (((v')*B*v)[1]/(2.0*state.σ*state.σ))
 
@@ -293,7 +278,7 @@ thetaWriter2 = open("theta2.log","w")
 hiddenWriter = open("hidden.log","w")
 acceptanceWriter = open("acceptance.log","w")
 
-moveWeights = [1.0, 250.0, 250.0]
+moveWeights = [1.0, 250.0, 20.0]
 #moveWeights = [1.0, 0.0]
 
 logger = AcceptanceLogger()
@@ -327,10 +312,10 @@ for iter=1:maxIterations
     elseif move == 3 # parameter moves
         proposedState.α += randn(rng) * 0.1
         #proposedState.β =  proposedState.β*exp(randn(rng) * 0.2)
-        proposedState.β +=  randn(rng) * 0.1
+        proposedState.β +=  randn(rng) * 0.2
         proposedState.σ +=  randn(rng) * 0.1
         proposedState.τ +=  randn(rng) * 0.1
-        if proposedState.β < 0.0  || abs(proposedState.β) >= 5.0 || proposedState.σ  <= 0.0 || proposedState.σ > 10 || proposedState.τ < 0.0
+        if proposedState.β < 0.0  || proposedState.β >= 5.0 || proposedState.σ  <= 0.0|| proposedState.σ > 10 || proposedState.τ < 0.0
             valid = false
         end
         partialPhyloUpdate = false
@@ -339,7 +324,8 @@ for iter=1:maxIterations
     end
     proposedState.α = 0.0
     proposedState.τ = 0.0
-    #proposedState.β = 0.0
+    #proposedState.σ = 0.5
+    #proposedState.β = 0.01
 
     logPropRatio = 0
     if valid        
@@ -356,8 +342,6 @@ for iter=1:maxIterations
         copy(currentState, proposedState)
         logReject!(logger, moveDescription)
     end
-
-
 
     if iter % sampleRate == 0
         if firstIteration
@@ -377,7 +361,7 @@ for iter=1:maxIterations
         end
 
         if iter % (sampleRate*100) == 0
-            write(acceptanceWriter,iter, join(list(logger),"\t"),"\n")
+            write(acceptanceWriter,string(iter),"\t", join(list(logger),"\t"),"\n")
             flush(acceptanceWriter)
             clear!(logger)
         end
