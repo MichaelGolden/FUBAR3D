@@ -5,7 +5,7 @@ include("Utils.jl")
 include("MCMCState.jl")
 include("AcceptanceLogger.jl")
 
-function computeLogLikelihoods(state::MCMCState, conditionals::Array{Float64,2}, scalarSum::Float64, c::Float64, distMatrix::SparseMatrixCSC{Float64, Int}, partialPhyloUpdate::Bool, partialMRFUpdate::Bool)
+function computeLogLikelihoods(state::MCMCState, conditionals::Array{Float64,2}, scalarSum::Float64, c::Float64, distMatrix::SparseMatrixCSC{Float64, Int}, B::Array{Float64,2}, partialPhyloUpdate::Bool, partialMRFUpdate::Bool)
     if !partialPhyloUpdate # recompute site likelihoods
         state.cachedPhyloLikelihoods = log((state.θ)'*conditionals)
     end
@@ -19,7 +19,7 @@ function computeLogLikelihoods(state::MCMCState, conditionals::Array{Float64,2},
     state.logPhyloLikelihood = 0.0 # no data
     state.logMRFLikelihood = computeIsingPseudoLogLikelihood(state, distMatrix)
     #state.logMRFLikelihood = computeBensMRFLogLikelihood(state, distMatrix)
-    #state.logMRFLikelihood = computeGaussianMRFLogLikelihood(state, distMatrix, partialMRFUpdate)
+    #state.logMRFLikelihood = computeGaussianMRFLogLikelihood(state, distMatrix, B, partialMRFUpdate)
 
     state.logLikelihood = state.logPhyloLikelihood+state.logMRFLikelihood
 
@@ -138,7 +138,7 @@ function computeBensMRFLogLikelihood(state::MCMCState, distMatrix::SparseMatrixC
 end
 
 
-function computeGaussianMRFLogLikelihood(state::MCMCState, distMatrix::SparseMatrixCSC{Float64, Int}, partialMRFUpdate::Bool)
+function computeGaussianMRFLogLikelihood(state::MCMCState, distMatrix::SparseMatrixCSC{Float64, Int}, B::Array{Float64,2}, partialMRFUpdate::Bool)
     B=zeros(Float64, numSites, numSites)
 
     rows = rowvals(distMatrix)
@@ -147,12 +147,17 @@ function computeGaussianMRFLogLikelihood(state::MCMCState, distMatrix::SparseMat
         B[i,i] = 1.0 * (state.σ*state.σ)
         for sparseindex in nzrange(distMatrix, i) # j = neighbours of i
             j = rows[sparseindex]
-            B[i,j] = state.β*exp(-(vals[sparseindex]-1)*state.τ) * (state.σ*state.σ)
+            B[i,j] = state.β * (state.σ*state.σ) * exp(-(vals[sparseindex]-1)*state.τ)
             B[j,i] = B[i,j]
         end        
     end
 
+    writer=open("matrix.log","w")
+    write(writer,string(B),"\n")
+    close(writer)
+
     if !isposdef(B)
+        print("Not positive definite", state.β,"\n")
         return -Inf
     end
 
@@ -161,17 +166,18 @@ function computeGaussianMRFLogLikelihood(state::MCMCState, distMatrix::SparseMat
     end
 
     v = zeros(Float64, numSites)
+
     for i=1:numSites
         v[i] = state.hiddenStates[i] - 1.5
     end
 
 
-    ll = -(2*pi*numSites*0.5) - (state.cachedDet*0.5) - (0.5*v'*inv(B)*v)
+    ll = -(2*pi*numSites*0.5) - (state.cachedDet*0.5) - (0.5*(v'*inv(B)*v)[1])
 
     return ll
 end
 
-function computeGaussianMRFLogLikelihood2(state::MCMCState, distMatrix::SparseMatrixCSC{Float64, Int}, partialMRFUpdate::Bool)
+function computeGaussianMRFLogLikelihoodOld(state::MCMCState, distMatrix::SparseMatrixCSC{Float64, Int}, partialMRFUpdate::Bool)
     B=zeros(Float64, numSites, numSites)
 
     rows = rowvals(distMatrix)
@@ -185,27 +191,15 @@ function computeGaussianMRFLogLikelihood2(state::MCMCState, distMatrix::SparseMa
         end
     end
 
-
     if !isposdef(B)
         return -Inf
     end
-
-    #=
-    writer = open("matrix.log","w")
-    write(writer, string(B),"\n",string(isposdef(B)),"\n")
-    close(writer)
-    =#
-
 
     if !partialMRFUpdate # recompute determinant: O(N^3)
         state.cachedDet = logdet(B)
     end
 
-    v = zeros(Float64, numSites)
-    for i=1:numSites
-        v[i] = state.hiddenStates[i] - 1.5
-    end
-
+    v = state.hiddenStates[i] - 1.5 # element-wise subtraction
 
     a = (state.cachedDet*0.5)
     b = (log(2*pi*state.σ*state.σ)*numSites*0.5)
@@ -240,7 +234,6 @@ end
 #gridInfoFile = "datasets/hcv1_polyprotein_300.nex.grid_info"
 gridInfoFile = "datasets/lysin.nex.grid_info"
 
-
 srand(948402288028201)
 rng = MersenneTwister(948402288028201)
 c=0.5
@@ -256,6 +249,8 @@ scalarSum = sum(scalars)
 
 distMatrix = getLinearDependenceDistanceMatrix(numSites, 1)
 
+#distMatrix = sparse(readdlm("distance.matrix.thresh15.csv",' '))
+
 numHiddenStates=2
 partialPhyloUpdate = false
 partialMRFUpdate = false
@@ -267,8 +262,11 @@ for col=1:numHiddenStates
 end
 initialPhyloLikelihoods = zeros(Float64, numHiddenStates, numSites)
 
+
+B=zeros(Float64, numSites, numSites)
+
 currentState = MCMCState(0.0,0.0,0.0,0.0,copy(initialθ),[rand(1:2) for i=1:numSites],0.0,0.5,1.0,1.0,copy(initialPhyloLikelihoods),0.0)
-computeLogLikelihoods(currentState, conditionals, scalarSum, c, distMatrix, partialPhyloUpdate, partialMRFUpdate)
+computeLogLikelihoods(currentState, conditionals, scalarSum, c, distMatrix, B, partialPhyloUpdate, partialMRFUpdate)
 proposedState  = MCMCState(currentState)
 
 iterations = 0
@@ -284,6 +282,7 @@ moveWeights = [1.0, 250.0, 20.0]
 logger = AcceptanceLogger()
 moveDescription = ""
 firstIteration = true
+
 
 sampleRate=100
 
@@ -302,7 +301,7 @@ for iter=1:maxIterations
         partialMRFUpdate = true
         moveDescription = "gibbs"
     elseif move == 2 # hidden state move
-        n = rand(1:1)
+        n = rand(1:4)
         for i=1:n
             proposedState.hiddenStates[rand(1:numSites)] = rand(1:2)
         end
@@ -311,9 +310,9 @@ for iter=1:maxIterations
         moveDescription = "hiddenStates_$n"
     elseif move == 3 # parameter moves
         proposedState.α += randn(rng) * 0.1
-        #proposedState.β =  proposedState.β*exp(randn(rng) * 0.2)
-        proposedState.β +=  randn(rng) * 0.2
-        proposedState.σ +=  randn(rng) * 0.1
+        proposedState.β +=  randn(rng) * 0.25
+        #proposedState.β +=  randn(rng) * 0.02
+        proposedState.σ +=  randn(rng) * 0.01
         proposedState.τ +=  randn(rng) * 0.1
         if proposedState.β < 0.0  || proposedState.β >= 5.0 || proposedState.σ  <= 0.0|| proposedState.σ > 10 || proposedState.τ < 0.0
             valid = false
@@ -328,8 +327,8 @@ for iter=1:maxIterations
     #proposedState.β = 0.01
 
     logPropRatio = 0
-    if valid        
-        computeLogLikelihoods(proposedState, conditionals, scalarSum, c, distMatrix, partialPhyloUpdate, partialMRFUpdate)
+    if valid
+        computeLogLikelihoods(proposedState, conditionals, scalarSum, c, distMatrix, B, partialPhyloUpdate, partialMRFUpdate)
         #prior = log(proposedState.β)*3.0
         prior = 0.0
         logPropRatio =  proposedState.logPrior - currentState.logPrior + prior
