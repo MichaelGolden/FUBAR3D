@@ -9,14 +9,15 @@ type MCMCState
     hiddenStates::Array{Int8}
     α::Float64
     β::Float64
+    σ::Float64
     τ::Float64
     cachedPhyloLikelihoods::Array{Float64,2}
     cachedDet::Float64
 
-    MCMCState(logLikelihood,logPhyloLikelihood,logMRFLikelihood,logPrior,θ,hiddenStates,α,β,τ,cachedPhyloLikelihoods,cachedDet) = new(logLikelihood,logPhyloLikelihood,logMRFLikelihood,logPrior,θ,hiddenStates,α,β,τ,cachedPhyloLikelihoods,cachedDet)
+    MCMCState(logLikelihood,logPhyloLikelihood,logMRFLikelihood,logPrior,θ,hiddenStates,α,β,σ,τ,cachedPhyloLikelihoods,cachedDet) = new(logLikelihood,logPhyloLikelihood,logMRFLikelihood,logPrior,θ,hiddenStates,α,β,σ,τ,cachedPhyloLikelihoods,cachedDet)
 
     function MCMCState(other::MCMCState)
-        return new(other.logLikelihood,other.logPhyloLikelihood,other.logMRFLikelihood,other.logPrior,copy(other.θ),copy(other.hiddenStates),other.α,other.β,other.τ,copy(other.cachedPhyloLikelihoods),other.cachedDet)
+        return new(other.logLikelihood,other.logPhyloLikelihood,other.logMRFLikelihood,other.logPrior,copy(other.θ),copy(other.hiddenStates),other.α,other.β,other.σ,other.τ,copy(other.cachedPhyloLikelihoods),other.cachedDet)
     end
 end
 
