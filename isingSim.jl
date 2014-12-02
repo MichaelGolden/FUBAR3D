@@ -14,3 +14,5 @@ function repβ(S::SparseMatrixCSC,β::Float16=1:.1:5,rep::Int32=10)
   Mβ = Array{Int8,3}
   Mβ = [i for i=isingSim(S,β),r=1:rep,βi=β]
 end
+
+### test
