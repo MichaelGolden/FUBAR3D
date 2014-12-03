@@ -149,7 +149,7 @@ function computeGaussianMRFLogLikelihood(numGridPoints::Int, numSites::Int, stat
             j = rows[sparseindex]
             B[i,j] = state.β * (state.σ*state.σ) * exp(-(vals[sparseindex]-1)*state.τ)
             B[j,i] = B[i,j]
-        end        
+        end
     end
 
     B=B'B
@@ -232,7 +232,7 @@ function getLinearDependenceDistanceMatrix(numSites::Int, dist::Int)
     return sparse(I, J, V)
 end
 
-function main()
+function mainMCMC(distMatrix::SparseMatrixCSC{Float64,Int64},β::Float64=0,maxIterations=1e4)
     #gridInfoFile = "datasets/hiv1_env_300.nex.grid_info"
     #gridInfoFile = "datasets/hcv1_polyprotein_300.nex.grid_info"
     gridInfoFile = "datasets/lysin.nex.grid_info"
@@ -250,7 +250,7 @@ function main()
     scalars = dataset[5]
     scalarSum = sum(scalars)
 
-    distMatrix = getLinearDependenceDistanceMatrix(numSites, 1)
+    #distMatrix = getLinearDependenceDistanceMatrix(numSites, 1)
 
     #distMatrix = sparse(readdlm("distance.matrix.thresh15.csv",' '))
 
@@ -278,7 +278,11 @@ function main()
     hiddenWriter = open("hidden.log","w")
     acceptanceWriter = open("acceptance.log","w")
 
-    moveWeights = [1.0, 250.0, 20.0]
+    if β > 0
+      moveWeights = [1.0, 250.0, 0]  # set move 3 from 20 -> 0
+    else
+      moveWeights = [1.0, 250.0, 20]  # set move 3 from 20 -> 0
+    end
     #moveWeights = [1.0, 0.0]
 
     logger = AcceptanceLogger()
@@ -288,7 +292,7 @@ function main()
 
     sampleRate=100
 
-    maxIterations=100000000
+    #maxIterations=100000
     for iter=1:maxIterations
         valid = true
         gibbs = false
@@ -326,7 +330,7 @@ function main()
         proposedState.α = 0.0
         proposedState.τ = 0.0
         #proposedState.σ = 1.0
-        #proposedState.β = 0.51
+        proposedState.β = β  # fix beta here
 
         logPropRatio = 0
         if valid
@@ -377,4 +381,5 @@ function main()
     return currentState.hiddenStates
 end
 
-main()
+#main()
+
