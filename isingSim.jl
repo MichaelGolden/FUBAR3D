@@ -3,9 +3,9 @@ include("MCMC.jl")
 # phase transition at β ≈ 2.5
 
 # run ising model
-function isingSim(S::SparseMatrixCSC{Float64,Int64},β::Float64,grid,maxIter=1e4)
+function isingSim(S::SparseMatrixCSC{Float64,Int64},β::Float64,grid,maxIter=1e4,repNum=0)
     # run ising model given structure (weighted graph)
-    mainMCMC(S,grid,β,maxIter)
+    mainMCMC(S,grid,β,maxIter,repNum)
     # return vector of states  Array{Int8,1}
 end
 
@@ -14,7 +14,7 @@ function repβ(S::SparseMatrixCSC{Float64,Int64},grid,β::FloatRange{Float64}=1:
   Mβ = zeros(Int,(size(S)[1],rep,length(β)))
   for b in 1:length(β)
     for r in 1:rep
-      i = isingSim(S,β[b],grid)
+      i = isingSim(S,β[b],grid,r)
       Mβ[:,r,b] += i
     end
   end

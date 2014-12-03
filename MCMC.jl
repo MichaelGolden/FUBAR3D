@@ -232,13 +232,13 @@ function getLinearDependenceDistanceMatrix(numSites::Int, dist::Int)
     return sparse(I, J, V)
 end
 
-function mainMCMC(distMatrix::SparseMatrixCSC{Float64,Int64} , gridInfoFile , β::Float64=0 ,maxIterations=1e4)
+function mainMCMC(distMatrix::SparseMatrixCSC{Float64,Int64} , gridInfoFile , β::Float64=0 ,maxIterations=1e4,repNum=0)
     #gridInfoFile = "datasets/hiv1_env_300.nex.grid_info"
     #gridInfoFile = "datasets/hcv1_polyprotein_300.nex.grid_info"
     #gridInfoFile = "datasets/lysin.nex.grid_info"
 
-    srand(948402288028201)
-    rng = MersenneTwister(948402288028201)
+    srand(948402288028201+repNum)
+    rng = MersenneTwister(948402288028201+repNum)
     c=0.5
 
     include("FUBARDataset.jl")
