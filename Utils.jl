@@ -26,7 +26,7 @@ function logSumOneAndExponential(a::Float64)
     end
 end
 
-function sample(v::Array{Float64})
+function sample(rng, v::Array{Float64})
     s = sum(v)
     n = length(v)
     r = rand(rng)

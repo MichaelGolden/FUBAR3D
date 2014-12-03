@@ -5,7 +5,7 @@ include("Utils.jl")
 include("MCMCState.jl")
 include("AcceptanceLogger.jl")
 
-function computeLogLikelihoods(state::MCMCState, conditionals::Array{Float64,2}, scalarSum::Float64, c::Float64, distMatrix::SparseMatrixCSC{Float64, Int}, B::Array{Float64,2}, partialPhyloUpdate::Bool, partialMRFUpdate::Bool)
+function computeLogLikelihoods(numGridPoints::Int, numSites::Int, state::MCMCState, conditionals::Array{Float64,2}, scalarSum::Float64, c::Float64, distMatrix::SparseMatrixCSC{Float64, Int}, B::Array{Float64,2}, partialPhyloUpdate::Bool, partialMRFUpdate::Bool)
     if !partialPhyloUpdate # recompute site likelihoods
         state.cachedPhyloLikelihoods = log((state.θ)'*conditionals)
     end
@@ -17,9 +17,9 @@ function computeLogLikelihoods(state::MCMCState, conditionals::Array{Float64,2},
 
     state.logPhyloLikelihood = phyloLikelihood+scalarSum
     state.logPhyloLikelihood = 0.0 # no data
-    state.logMRFLikelihood = computeIsingPseudoLogLikelihood(state, distMatrix)
-    #state.logMRFLikelihood = computeBensMRFLogLikelihood(state, distMatrix)
-    #state.logMRFLikelihood = computeGaussianMRFLogLikelihood(state, distMatrix, B, partialMRFUpdate)
+    state.logMRFLikelihood = computeIsingPseudoLogLikelihood(numGridPoints, numSites, state, distMatrix)
+    #state.logMRFLikelihood = computeBensMRFLogLikelihood(numGridPoints, numSites, state, distMatrix)
+    #state.logMRFLikelihood = computeGaussianMRFLogLikelihood(numGridPoints, numSites, state, distMatrix, B, partialMRFUpdate)
 
     state.logLikelihood = state.logPhyloLikelihood+state.logMRFLikelihood
 
@@ -31,7 +31,7 @@ function computeLogLikelihoods(state::MCMCState, conditionals::Array{Float64,2},
     state.logPrior = 0.0  # no data
 end
 
-function gibbsUpdate(state::MCMCState, hiddenState::Int, conditionals::Array{Float64,2}, scalarSum::Float64, c::Float64)
+function gibbsUpdate(rng::MersenneTwister,numGridPoints::Int, numSites::Int, state::MCMCState, hiddenState::Int, conditionals::Array{Float64,2}, scalarSum::Float64, c::Float64)
     φ = zeros(Float64, numGridPoints)
     v = zeros(Float64, numGridPoints)
     for i=1:numSites
@@ -39,7 +39,7 @@ function gibbsUpdate(state::MCMCState, hiddenState::Int, conditionals::Array{Flo
             for j=1:numGridPoints
                 v[j] = state.θ[j,hiddenState]*conditionals[j,i]
             end
-            φ[sample(v)] += 1.0
+            φ[sample(rng, v)] += 1.0
         end
     end
     alphas = zeros(Float64, numGridPoints)
@@ -74,7 +74,7 @@ function fractionNeighboursSame(hiddenStates::Array{Int8})
     return fractionSame / n
 end
 
-function thetaMove(θ::Array{Float64}) # unused
+function thetaMove(numGridPoints::Int, numSites::Int, θ::Array{Float64}) # unused
     x = rand(1:numGridPoints)
     y = x
     while x==y
@@ -92,7 +92,7 @@ function thetaMove(θ::Array{Float64}) # unused
     end
 end
 
-function computeIsingPseudoLogLikelihood(state::MCMCState, distMatrix::SparseMatrixCSC{Float64, Int})
+function computeIsingPseudoLogLikelihood(numGridPoints::Int, numSites::Int, state::MCMCState, distMatrix::SparseMatrixCSC{Float64, Int})
     ll = 0.0
     rows = rowvals(distMatrix)
     vals = nonzeros(distMatrix)
@@ -114,7 +114,7 @@ function computeIsingPseudoLogLikelihood(state::MCMCState, distMatrix::SparseMat
     return ll
 end
 
-function computeBensMRFLogLikelihood(state::MCMCState, distMatrix::SparseMatrixCSC{Float64, Int})
+function computeBensMRFLogLikelihood(numGridPoints::Int, numSites::Int, state::MCMCState, distMatrix::SparseMatrixCSC{Float64, Int})
     ll = 0.0
     rows = rowvals(distMatrix)
     vals = nonzeros(distMatrix)
@@ -138,7 +138,7 @@ function computeBensMRFLogLikelihood(state::MCMCState, distMatrix::SparseMatrixC
 end
 
 
-function computeGaussianMRFLogLikelihood(state::MCMCState, distMatrix::SparseMatrixCSC{Float64, Int}, B::Array{Float64,2}, partialMRFUpdate::Bool)
+function computeGaussianMRFLogLikelihood(numGridPoints::Int, numSites::Int, state::MCMCState, distMatrix::SparseMatrixCSC{Float64, Int}, B::Array{Float64,2}, partialMRFUpdate::Bool)
     B=zeros(Float64, numSites, numSites)
 
     rows = rowvals(distMatrix)
@@ -152,9 +152,11 @@ function computeGaussianMRFLogLikelihood(state::MCMCState, distMatrix::SparseMat
         end        
     end
 
-    writer=open("matrix.log","w")
-    write(writer,string(B),"\n")
-    close(writer)
+    B=B'B
+
+    #writer=open("matrix.log","w")
+   # write(writer,string(B),"\n")
+    #close(writer)
 
     if !isposdef(B)
         print("Not positive definite", state.β,"\n")
@@ -177,7 +179,7 @@ function computeGaussianMRFLogLikelihood(state::MCMCState, distMatrix::SparseMat
     return ll
 end
 
-function computeGaussianMRFLogLikelihoodOld(state::MCMCState, distMatrix::SparseMatrixCSC{Float64, Int}, partialMRFUpdate::Bool)
+function computeGaussianMRFLogLikelihoodOld(numGridPoints::Int, numSites::Int, state::MCMCState, distMatrix::SparseMatrixCSC{Float64, Int}, partialMRFUpdate::Bool)
     B=zeros(Float64, numSites, numSites)
 
     rows = rowvals(distMatrix)
@@ -230,144 +232,149 @@ function getLinearDependenceDistanceMatrix(numSites::Int, dist::Int)
     return sparse(I, J, V)
 end
 
-#gridInfoFile = "datasets/hiv1_env_300.nex.grid_info"
-#gridInfoFile = "datasets/hcv1_polyprotein_300.nex.grid_info"
-gridInfoFile = "datasets/lysin.nex.grid_info"
+function main()
+    #gridInfoFile = "datasets/hiv1_env_300.nex.grid_info"
+    #gridInfoFile = "datasets/hcv1_polyprotein_300.nex.grid_info"
+    gridInfoFile = "datasets/lysin.nex.grid_info"
 
-srand(948402288028201)
-rng = MersenneTwister(948402288028201)
-c=0.5
+    srand(948402288028201)
+    rng = MersenneTwister(948402288028201)
+    c=0.5
 
-include("FUBARDataset.jl")
-dataset = loadDataset(gridInfoFile)
-numGridPoints = dataset[1]
-numSites = dataset[2]
-grid = dataset[3]
-conditionals = dataset[4]
-scalars = dataset[5]
-scalarSum = sum(scalars)
+    include("FUBARDataset.jl")
+    dataset = loadDataset(gridInfoFile)
+    numGridPoints = dataset[1]
+    numSites = dataset[2]
+    grid = dataset[3]
+    conditionals = dataset[4]
+    scalars = dataset[5]
+    scalarSum = sum(scalars)
 
-distMatrix = getLinearDependenceDistanceMatrix(numSites, 1)
+    distMatrix = getLinearDependenceDistanceMatrix(numSites, 1)
 
-#distMatrix = sparse(readdlm("distance.matrix.thresh15.csv",' '))
+    #distMatrix = sparse(readdlm("distance.matrix.thresh15.csv",' '))
 
-numHiddenStates=2
-partialPhyloUpdate = false
-partialMRFUpdate = false
+    numHiddenStates=2
+    partialPhyloUpdate = false
+    partialMRFUpdate = false
 
-initialθ = zeros(Float64, numGridPoints, numHiddenStates)
-for col=1:numHiddenStates
-    initialθ[:,col] = rand(numGridPoints)
-    initialθ[:,col] = initialθ[:,col]/sum(initialθ[:,col])
+    initialθ = zeros(Float64, numGridPoints, numHiddenStates)
+    for col=1:numHiddenStates
+        initialθ[:,col] = rand(numGridPoints)
+        initialθ[:,col] = initialθ[:,col]/sum(initialθ[:,col])
+    end
+    initialPhyloLikelihoods = zeros(Float64, numHiddenStates, numSites)
+
+    B=zeros(Float64, numSites, numSites)
+
+    currentState = MCMCState(0.0,0.0,0.0,0.0,copy(initialθ),[rand(1:2) for i=1:numSites],0.0,0.5,1.0,1.0,copy(initialPhyloLikelihoods),0.0)
+    computeLogLikelihoods(numGridPoints, numSites, currentState, conditionals, scalarSum, c, distMatrix, B, partialPhyloUpdate, partialMRFUpdate)
+    proposedState  = MCMCState(currentState)
+
+    iterations = 0
+    logWriter = open("mcmc.log","w")
+    thetaWriter = open("theta.log","w")
+    thetaWriter2 = open("theta2.log","w")
+    hiddenWriter = open("hidden.log","w")
+    acceptanceWriter = open("acceptance.log","w")
+
+    moveWeights = [1.0, 250.0, 20.0]
+    #moveWeights = [1.0, 0.0]
+
+    logger = AcceptanceLogger()
+    moveDescription = ""
+    firstIteration = true
+
+
+    sampleRate=100
+
+    maxIterations=100000000
+    for iter=1:maxIterations
+        valid = true
+        gibbs = false
+        move = sample(rng, moveWeights)
+
+        if move == 1
+            #valid = valid ? thetaMove(proposedState.θ[:,rand(1:2)] : false
+            gibbsUpdate(rng, numGridPoints, numSites, proposedState, 1, conditionals, scalarSum, c)
+            gibbsUpdate(rng, numGridPoints, numSites, proposedState, 2, conditionals, scalarSum, c)
+            gibbs=true
+            partialPhyloUpdate = false
+            partialMRFUpdate = true
+            moveDescription = "gibbs"
+        elseif move == 2 # hidden state move
+            n = rand(1:4)
+            for i=1:n
+                proposedState.hiddenStates[rand(1:numSites)] = rand(1:2)
+            end
+            partialPhyloUpdate = true
+            partialMRFUpdate = true
+            moveDescription = "hiddenStates_$n"
+        elseif move == 3 # parameter moves
+            proposedState.α += randn(rng) * 0.1
+            proposedState.β +=  randn(rng) * 0.25
+            #proposedState.β +=  randn(rng) * 0.02
+            proposedState.σ +=  randn(rng) * 0.01
+            proposedState.τ +=  randn(rng) * 0.1
+            if proposedState.β < 0.0  || proposedState.β >= 5.0 || proposedState.σ  <= 0.0|| proposedState.σ > 10 || proposedState.τ < 0.0
+                valid = false
+            end
+            partialPhyloUpdate = false
+            partialMRFUpdate = false
+            moveDescription = "parameters"
+        end
+        proposedState.α = 0.0
+        proposedState.τ = 0.0
+        #proposedState.σ = 1.0
+        #proposedState.β = 0.51
+
+        logPropRatio = 0
+        if valid
+            computeLogLikelihoods(numGridPoints, numSites, proposedState, conditionals, scalarSum, c, distMatrix, B, partialPhyloUpdate, partialMRFUpdate)
+            #prior = log(proposedState.β)*3.0
+            prior = 0.0
+            logPropRatio =  proposedState.logPrior - currentState.logPrior + prior
+        end
+        Δll = proposedState.logLikelihood - currentState.logLikelihood + logPropRatio
+        if valid && (gibbs || exp(Δll) > rand(rng))
+            copy(proposedState, currentState)
+            logAccept!(logger, moveDescription)
+        else
+            copy(currentState, proposedState)
+            logReject!(logger, moveDescription)
+        end
+
+        if iter % sampleRate == 0
+            if firstIteration
+                write(logWriter, "iter\tLL\tphyloLL\tMRFLL\tpriorLL\tfracNeighboursSame\talpha\tbeta\tsigma\ttau\n")
+                firstIteration = false
+            end
+            write(logWriter,string(iter, "\t", currentState.logLikelihood,"\t", currentState.logPhyloLikelihood,"\t", currentState.logMRFLikelihood,"\t", currentState.logPrior, "\t", fractionNeighboursSame(currentState.hiddenStates), "\t", currentState.α, "\t", currentState.β,"\t", currentState.σ, "\t", currentState.τ, "\n"))
+            flush(logWriter)
+
+            if iter % (sampleRate*10) == 0
+                write(thetaWriter,join(currentState.θ[:,2],"\t"),"\n")
+                write(thetaWriter2,join(currentState.θ[:,2],"\t"),"\n")
+                flush(thetaWriter)
+                flush(thetaWriter2)
+                write(hiddenWriter,join(currentState.hiddenStates,""), "\n")
+                flush(hiddenWriter)
+            end
+
+            if iter % (sampleRate*100) == 0
+                write(acceptanceWriter,string(iter),"\t", join(list(logger),"\t"),"\n")
+                flush(acceptanceWriter)
+                clear!(logger)
+            end
+        end
+    end
+    close(logWriter)
+    close(thetaWriter)
+    close(thetaWriter2)
+    close(hiddenWriter)
+    close(acceptanceWriter)
+
+    return currentState.hiddenStates
 end
-initialPhyloLikelihoods = zeros(Float64, numHiddenStates, numSites)
 
-
-B=zeros(Float64, numSites, numSites)
-
-currentState = MCMCState(0.0,0.0,0.0,0.0,copy(initialθ),[rand(1:2) for i=1:numSites],0.0,0.5,1.0,1.0,copy(initialPhyloLikelihoods),0.0)
-computeLogLikelihoods(currentState, conditionals, scalarSum, c, distMatrix, B, partialPhyloUpdate, partialMRFUpdate)
-proposedState  = MCMCState(currentState)
-
-iterations = 0
-logWriter = open("mcmc.log","w")
-thetaWriter = open("theta.log","w")
-thetaWriter2 = open("theta2.log","w")
-hiddenWriter = open("hidden.log","w")
-acceptanceWriter = open("acceptance.log","w")
-
-moveWeights = [1.0, 250.0, 20.0]
-#moveWeights = [1.0, 0.0]
-
-logger = AcceptanceLogger()
-moveDescription = ""
-firstIteration = true
-
-
-sampleRate=100
-
-maxIterations=100000000
-for iter=1:maxIterations
-    valid = true
-    gibbs = false
-    move = sample(moveWeights)
-
-    if move == 1
-        #valid = valid ? thetaMove(proposedState.θ[:,rand(1:2)] : false
-        gibbsUpdate(proposedState, 1, conditionals, scalarSum, c)
-        gibbsUpdate(proposedState, 2, conditionals, scalarSum, c)
-        gibbs=true
-        partialPhyloUpdate = false
-        partialMRFUpdate = true
-        moveDescription = "gibbs"
-    elseif move == 2 # hidden state move
-        n = rand(1:4)
-        for i=1:n
-            proposedState.hiddenStates[rand(1:numSites)] = rand(1:2)
-        end
-        partialPhyloUpdate = true
-        partialMRFUpdate = true
-        moveDescription = "hiddenStates_$n"
-    elseif move == 3 # parameter moves
-        proposedState.α += randn(rng) * 0.1
-        proposedState.β +=  randn(rng) * 0.25
-        #proposedState.β +=  randn(rng) * 0.02
-        proposedState.σ +=  randn(rng) * 0.01
-        proposedState.τ +=  randn(rng) * 0.1
-        if proposedState.β < 0.0  || proposedState.β >= 5.0 || proposedState.σ  <= 0.0|| proposedState.σ > 10 || proposedState.τ < 0.0
-            valid = false
-        end
-        partialPhyloUpdate = false
-        partialMRFUpdate = false
-        moveDescription = "parameters"
-    end
-    proposedState.α = 0.0
-    proposedState.τ = 0.0
-    #proposedState.σ = 0.5
-    #proposedState.β = 0.01
-
-    logPropRatio = 0
-    if valid
-        computeLogLikelihoods(proposedState, conditionals, scalarSum, c, distMatrix, B, partialPhyloUpdate, partialMRFUpdate)
-        #prior = log(proposedState.β)*3.0
-        prior = 0.0
-        logPropRatio =  proposedState.logPrior - currentState.logPrior + prior
-    end
-    Δll = proposedState.logLikelihood - currentState.logLikelihood + logPropRatio
-    if valid && (gibbs || exp(Δll) > rand(rng))
-        copy(proposedState, currentState)
-        logAccept!(logger, moveDescription)
-    else
-        copy(currentState, proposedState)
-        logReject!(logger, moveDescription)
-    end
-
-    if iter % sampleRate == 0
-        if firstIteration
-            write(logWriter, "iter\tLL\tphyloLL\tMRFLL\tpriorLL\tfracNeighboursSame\talpha\tbeta\tsigma\ttau\n")
-            firstIteration = false
-        end
-        write(logWriter,string(iter, "\t", currentState.logLikelihood,"\t", currentState.logPhyloLikelihood,"\t", currentState.logMRFLikelihood,"\t", currentState.logPrior, "\t", fractionNeighboursSame(currentState.hiddenStates), "\t", currentState.α, "\t", currentState.β,"\t", currentState.σ, "\t", currentState.τ, "\n"))
-        flush(logWriter)
-
-        if iter % (sampleRate*10) == 0
-            write(thetaWriter,join(currentState.θ[:,2],"\t"),"\n")
-            write(thetaWriter2,join(currentState.θ[:,2],"\t"),"\n")
-            flush(thetaWriter)
-            flush(thetaWriter2)
-            write(hiddenWriter,join(currentState.hiddenStates,""), "\n")
-            flush(hiddenWriter)
-        end
-
-        if iter % (sampleRate*100) == 0
-            write(acceptanceWriter,string(iter),"\t", join(list(logger),"\t"),"\n")
-            flush(acceptanceWriter)
-            clear!(logger)
-        end
-    end
-end
-close(logWriter)
-close(thetaWriter)
-close(thetaWriter2)
-close(hiddenWriter)
-close(acceptanceWriter)
+main()
