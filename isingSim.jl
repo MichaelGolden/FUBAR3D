@@ -14,7 +14,7 @@ function repβ(S::SparseMatrixCSC{Float64,Int64},grid,β::FloatRange{Float64}=1:
   Mβ = zeros(Int,(size(S)[1],rep,length(β)))
   for b in 1:length(β)
     for r in 1:rep
-      i = isingSim(S,β[b],grid,r)
+      i = isingSim(S,β[b],grid,1e4,r)
       Mβ[:,r,b] += i
     end
   end
