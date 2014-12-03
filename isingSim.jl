@@ -5,7 +5,7 @@
 function isingSim(S::SparseMatrixCSC,β::Float64)
     # run ising model given structure (weighted graph)
 
-    # return vector of states
+    # return vector of states  Array{Int8,1}
 end
 
 # β repitition & selection
