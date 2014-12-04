@@ -33,8 +33,9 @@ function test()
     end
   end
   S = sparse(R)
-  out = repβ(S,"datasets/rhodopsin.nwk.grid_info",0:.5:3,5)
-  writedlm3D(out,"out/test.out",2:.25:3,',')
+  β = 0:.5:3
+  out = repβ(S,"datasets/rhodopsin.nwk.grid_info",β,5)
+  writedlm3D(out,"out/test.out",β,',')
 end
 
 function writedlm3D(m,title,d3Titles,dlm)
