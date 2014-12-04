@@ -22,7 +22,20 @@ function repβ(S::SparseMatrixCSC{Float64,Int64},grid,β::FloatRange{Float64}=1:
 end
 
 ### test
-out = repβ(sparse(readdlm("datasets/distance.matrix.thresh15.csv",' ')),"datasets/rhodopsin.nwk.grid_info",2:.25:3,3)
+function test()
+  thresh = 5.1
+  R = readdlm("datasets/distance.matrix.thresh65.csv",' ')
+  for i in 1:size(R)[1]
+    for j in 1:size(R)[2]
+      if R[i,j] > thresh
+        R[i,j] = 0
+      end
+    end
+  end
+  S = sparse(R)
+  out = repβ(S,"datasets/rhodopsin.nwk.grid_info",0:.5:3,5)
+  writedlm3D(out,"out/test.out",2:.25:3,',')
+end
 
 function writedlm3D(m,title,d3Titles,dlm)
   if length(d3Titles) != size(m)[3]
