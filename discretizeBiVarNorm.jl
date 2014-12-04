@@ -15,7 +15,7 @@ function discMVNorm(d::MultiVnorm,grid::Array{Float64,2},rankgrid::Bool=true)
   h = [pdf(d,[grid[i,1],grid[i,2]]) for i=1:size(grid)[1]]
   # Normalize so all the heights sum to 1
   Σh = sum(h)
-  hNormalized = [float64(h[i]/Σh) for i=1:length(h)]
+  hNormalized = [h[i]/Σh for i=1:length(h)]
 end
 
 #rank
@@ -39,6 +39,6 @@ end
 
 a=test_rank()
 typeof(a)
-println(a')
+println(a)
 #cd("/Users/benjaminkellman/Documents/Grad/Labs/Pond/WeekPaper/FUBAR3D/")
 #println(test_rank())
