@@ -16,58 +16,62 @@ s <- seq(1, ncol(points), by=3)
 # split the 3n columns into n data frames
 # data frame columns contain x, y, z coordinates for the peptide
 # rows contain the xyz coordinate for each site
-frames <- lapply(s, function(x) points[,c(x, x + 1, x + 2)])
+peptides <- lapply(s, function(x) points[,c(x, x + 1, x + 2)])
 
 # 3-d plot the coordinates at each site for each peptide
 plot_peptide <- function(p)
 {
-  plot3d(p[,1], p[,2], p[,3], col=sample(colors(), 1), add=TRUE)
+  plot3d(p[,1], p[,2], p[,3], col=sample(colors(), 1), 
+         add=TRUE, size=5)
   ts.surf <- t(convhulln(p))
-  #rgl.triangles(p[ts.surf,1],p[ts.surf,2],p[ts.surf,3],
-   #            col="blue",alpha=0.01)
+  rgl.triangles(p[ts.surf,1],p[ts.surf,2],p[ts.surf,3],
+               col="blue",alpha=0.05)
 }
-lapply(frames, plot_peptide)
+lapply(peptides, plot_peptide)
 
 max_dist = 10
 
 # function to draw segments between all pairs of close points
-connect_groups <- function(g)
+connect_peptides <- function(peptide1, peptide2)
 {
-  g1 = g[[1]]
-  g2 = g[[2]]
+  #g1 = g[[1]]
+  #g2 = g[[2]]
   
-  colors = replicate(nrow(g1), runif(nrow(g1)))
-  close = fields.rdist.near(g1, g2, delta=max_dist, 
-                            max.points=nrow(g1)^2)
+  probs = replicate(nrow(peptide1), runif(nrow(peptide1)))
+  close = fields.rdist.near(peptide1, peptide2, delta=max_dist, 
+                            max.points=nrow(peptide1)^2)
   close_inds = close$ind
   close_inds <- close_inds[close_inds[,1] != close_inds[,2],]
   
   close1 = close_inds[,1]
   close2 = close_inds[,2]
   
-  g1 = g1[close1,]
-  g2 = g2[close2,]
+  peptide1 = peptide1[close1,]
+  peptide2 = peptide2[close2,]
   
-  colors = colors[close1, close2]
-  colors = diag(colors)
-  ncolors = 10000
+  
+  probs = probs[close1, close2]
+  probs = diag(probs)
+  ncolors = 20
   ramp <- heat.colors(ncolors)
   bins <- seq(0, 1, 1/ncolors)
-  colors <- .bincode(colors, bins, include.lowest=TRUE)
+  colors <- .bincode(probs, bins, include.lowest=TRUE)
   colors <- ramp[colors]
   
   
-  segments3d(c(g1[,1], g2[,1]), c(g1[,2], g2[,2]), c(g1[,3], g2[,3]), 
+  segments3d(c(peptide1[,1], peptide2[,1]), 
+             c(peptide1[,2], peptide2[,2]), 
+             c(peptide1[,3], peptide2[,3]), 
              add=TRUE, col=colors)
 }
 
 # iterate through every combination of two peptides
 # for each combination apply the function to connect close sites
 # between those two peptide pairs
-for (frame1 in frames)
+for (peptide1 in peptides)
 {
-  for (frame2 in frames)
+  for (peptide2 in peptides)
   {
-    connect_groups(list(frame1, frame2))
+    connect_peptides(peptide1, peptide2)
   }
 }
