@@ -34,30 +34,34 @@ max_dist = 10
 # function to draw segments between all pairs of close points
 connect_peptides <- function(peptide1, peptide2)
 {
-  #g1 = g[[1]]
-  #g2 = g[[2]]
-  
   probs = replicate(nrow(peptide1), runif(nrow(peptide1)))
+  # computes all pairs of points within delta of each other
   close = fields.rdist.near(peptide1, peptide2, delta=max_dist, 
                             max.points=nrow(peptide1)^2)
   close_inds = close$ind
+  # remove points from the same row in different peptides
   close_inds <- close_inds[close_inds[,1] != close_inds[,2],]
   
   close1 = close_inds[,1]
   close2 = close_inds[,2]
   
+  # get the multiset of points frome each peptide that are
+  # close to each other
   peptide1 = peptide1[close1,]
   peptide2 = peptide2[close2,]
   
-  
+  # obtain probability of same site between each pair of close
+  #peptides
   probs = probs[close1, close2]
   probs = diag(probs)
+  
+  # create discrete color space, and draw edge colors based on
+  # location of the edge probability in color gradient
   ncolors = 20
   ramp <- heat.colors(ncolors)
   bins <- seq(0, 1, 1/ncolors)
   colors <- .bincode(probs, bins, include.lowest=TRUE)
   colors <- ramp[colors]
-  
   
   segments3d(c(peptide1[,1], peptide2[,1]), 
              c(peptide1[,2], peptide2[,2]), 
@@ -65,9 +69,7 @@ connect_peptides <- function(peptide1, peptide2)
              add=TRUE, col=colors)
 }
 
-# iterate through every combination of two peptides
-# for each combination apply the function to connect close sites
-# between those two peptide pairs
+# connect each peptide pair (including with itself)
 for (peptide1 in peptides)
 {
   for (peptide2 in peptides)
