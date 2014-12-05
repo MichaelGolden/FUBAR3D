@@ -47,3 +47,7 @@ function writedlm3D(m,title,d3Titles,dlm)
   end
 end
 
+test()
+#cd("/Users/benjaminkellman/Documents/Grad/Labs/Pond/WeekPaper/FUBAR3D/")
+
+
