@@ -272,11 +272,23 @@ function mainMCMC(distMatrix::SparseMatrixCSC{Float64,Int64} , gridInfoFile , β
     proposedState  = MCMCState(currentState)
 
     iterations = 0
-    logWriter = open("mcmc.log","w")
-    thetaWriter = open("theta.log","w")
-    thetaWriter2 = open("theta2.log","w")
-    hiddenWriter = open("hidden.log","w")
-    acceptanceWriter = open("acceptance.log","w")
+
+    fnamesary = ["mcmc.log","theta.log","theta2.log","hidden.log","acceptance.log"]
+    gridInfoLogFile = split(gridInfoFile,"/")[2]
+    fnamesary = ["log/"*gridInfoLogFile*"_"*string(fnamesary[i]) for i=1:length(fnamesary)]
+#    fnamesary = [string(gridInfoLogFile,"_",string(fnamesary[i])) for i=1:length(fnamesary)]
+    fi=0
+    logWriter = open(fnamesary[fi+=1],"w")
+    thetaWriter = open(fnamesary[fi+=1],"w")
+    thetaWriter2 = open(fnamesary[fi+=1],"w")
+    hiddenWriter = open(fnamesary[fi+=1],"w")
+    acceptanceWriter = open(fnamesary[fi+=1],"w")
+
+    #logWriter = open("mcmc.log","w")
+    #thetaWriter = open("theta.log","w")
+    #thetaWriter2 = open("theta2.log","w")
+    #hiddenWriter = open("hidden.log","w")
+    #acceptanceWriter = open("acceptance.log","w")
 
     if β > 0
       moveWeights = [1.0, 250.0, 0]  # set move 3 from 20 -> 0
