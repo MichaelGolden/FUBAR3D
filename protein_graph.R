@@ -8,9 +8,15 @@ library(geometry)
 library(spam)
 library(grid)
 library(grDevices)
+library(Matrix)
 
 points <- read.table("datasets/hiv1.coords", sep="\t", header=TRUE)
 points <- na.omit(points)
+npoints <- nrow(points)
+probs <- read.table("datasets/rhodopsin.nwk.grid_info.sparse.neighbours",
+                     sep='\t', header=FALSE)
+probs <- sparseMatrix(i=probs[,1], j=probs[,2], x=probs[,3],
+                      dims=c(npoints, npoints))
 
 s <- seq(1, ncol(points), by=3)
 # split the 3n columns into n data frames
@@ -24,17 +30,16 @@ plot_peptide <- function(p)
   plot3d(p[,1], p[,2], p[,3], col=sample(colors(), 1), 
          add=TRUE, size=5)
   ts.surf <- t(convhulln(p))
-  rgl.triangles(p[ts.surf,1],p[ts.surf,2],p[ts.surf,3],
-               col="blue",alpha=0.05)
+  #rgl.triangles(p[ts.surf,1],p[ts.surf,2],p[ts.surf,3],
+   #            col="blue",alpha=0.05)
 }
 lapply(peptides, plot_peptide)
 
-max_dist = 10
+max_dist = 20
 
 # function to draw segments between all pairs of close points
 connect_peptides <- function(peptide1, peptide2)
 {
-  probs = replicate(nrow(peptide1), runif(nrow(peptide1)))
   # computes all pairs of points within delta of each other
   close = fields.rdist.near(peptide1, peptide2, delta=max_dist, 
                             max.points=nrow(peptide1)^2)
