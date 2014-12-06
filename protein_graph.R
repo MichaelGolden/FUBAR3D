@@ -28,14 +28,18 @@ peptides <- lapply(s, function(x) points[,c(x, x + 1, x + 2)])
 plot_peptide <- function(p)
 {
   plot3d(p[,1], p[,2], p[,3], col=sample(colors(), 1), 
-         add=TRUE, size=5)
+         add=TRUE, size=10)
+  
+  # compute and plot the convex hull for the protein coordinates
+  # makes it easier to see links between peptide groups
+  # slows down plot-rendering
   ts.surf <- t(convhulln(p))
   #rgl.triangles(p[ts.surf,1],p[ts.surf,2],p[ts.surf,3],
    #            col="blue",alpha=0.05)
 }
 lapply(peptides, plot_peptide)
 
-max_dist = 20
+max_dist = 10
 
 # function to draw segments between all pairs of close points
 connect_peptides <- function(peptide1, peptide2)
@@ -62,16 +66,23 @@ connect_peptides <- function(peptide1, peptide2)
   
   # create discrete color space, and draw edge colors based on
   # location of the edge probability in color gradient
-  ncolors = 20
-  ramp <- heat.colors(ncolors)
-  bins <- seq(0, 1, 1/ncolors)
-  colors <- .bincode(probs, bins, include.lowest=TRUE)
-  colors <- ramp[colors]
-  
+#   ncolors = 20
+#   ramp <- heat.colors(ncolors)
+#   bins <- seq(0, 1, 1/ncolors)
+#   colors <- .bincode(probs, bins, include.lowest=TRUE)
+#   colors <- ramp[colors]
+
+  # converts the probabilities to a value on a red/black color scale
+  # the gb values are set to 0, and r is the probability
+  # high probabilities lead to red-ish colors, low probabilities
+  # are black
+  colors <- rgb(probs, 0, 0)
+  #colors <- rgb(1, 1 - probs, 1 -probs)
+
   segments3d(c(peptide1[,1], peptide2[,1]), 
              c(peptide1[,2], peptide2[,2]), 
              c(peptide1[,3], peptide2[,3]), 
-             add=TRUE, col=colors)
+             add=TRUE, col=colors, lwd=2)
 }
 
 # connect each peptide pair (including with itself)
