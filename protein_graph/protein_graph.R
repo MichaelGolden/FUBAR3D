@@ -4,16 +4,15 @@ library(pdist)
 library(magic)
 library(abind)
 library(geometry)
-#library(combinat)
 library(spam)
 library(grid)
 library(grDevices)
 library(Matrix)
 
-points <- read.table("datasets/hiv1.coords", sep="\t", header=TRUE)
+points <- read.table("../datasets/hiv1.coords", sep="\t", header=TRUE)
 points <- na.omit(points)
 npoints <- nrow(points)
-probs <- read.table("datasets/rhodopsin.nwk.grid_info.sparse.neighbours",
+probs <- read.table("../datasets/rhodopsin.nwk.grid_info.sparse.neighbours",
                      sep='\t', header=FALSE)
 probs <- sparseMatrix(i=probs[,1], j=probs[,2], x=probs[,3],
                       dims=c(npoints, npoints))
